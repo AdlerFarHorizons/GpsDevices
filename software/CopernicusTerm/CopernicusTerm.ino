@@ -1,110 +1,193 @@
 /*
-  CopernicusTerm.ino
-  
-  TTY NMEA I/O for Trimble's Copernicus II GPS module.
-  
-  Connected to Arduino per the schematic 
-  "CopernicusBasicTestCircuit".
-  
-  Reference: 
-  
-  "Copernicus II(R) GPS Receiver Reference Manual", Appendix C
-  
-  Uses CopernicusII port B and assumes it is programmed for the
-  default 4800 baud rate.
-  
-  Terminal will display automatically sent NMEA sentences from 
-  the unit per the current configuration. The default factory 
-  setting is to send a GGA and VTG sentence every second regardless
-  of the unit getting an actual fix.
-  
-  Enter a Trimble proprietary command sentence exclusive of '$PTNL'
-  at the beginning and '*cs' ('*' + checksum characters) at the
-  end. The terminal will immediately display the entire sentence
-  as sent ('Sending: <full sentence>') amid the incoming NMEA
-  sentences. If the unit sends a response, it will appear shortly
-  after.
-  
-  NOTE: Since sending is asynchronous, the display sometimes gets
-  garbled temporarily and the message probably got through ok.
-  Re-send the message if you're not sure it was received properly.
-  
-  If you're not seeing any output, the unit might have been
-  configured for no automatic sentences on power up. A test to 
-  see if the unit is functional and your wiring is correct is to
-  send a request for the current automatic sentence configuration
-  by entering 'QNM' (no quotes). You should receive a response of the form 
-  '$PTNLRNM,xxxx,yy,*cc' regardless of having satellites in view
-  or even and antenna attached. If 'xxxx' is '0000', the unit
-  has in the past been configured for no auto output and that 
-  configuration had been saved with the RT message. So, it is
-  probably working just fine. Change the auto output to factory
-  default with 'SNM,0005,01'. You should get a confirmation
-  '$PTNLRNM,A*3A' (the 'A' means valid, if 'V', it's invalid and
-  you may have entered the command incorrectly.
-  
+	TTY NMEA I/O for Trimble's Copernicus II GPS module.
+
+	Connected to Arduino per the schematic 
+	"CopernicusBasicTestCircuit".
+
+	Far Horizons Lab
+	June 2014
 */
 
+
+/*
+  NOTES:
+  
+  GGA is 78 chars, GSV is 52. Serial B delivers this in (130*10 bits)/baudRate sec, or
+  271ms at 4800 baud with default configuration.
+  
+  NMEA sentences are 82 chars maximum including CR and LF, so maximum time per sentence
+  is 171ms at 4800 baud. 
+*/
 #include <SoftwareSerial.h>
 SoftwareSerial ss(6,5);
-const byte CHK_INIT = 'P' ^ 'T' ^ 'N' ^ 'L';
-boolean echoOn;
-String cmdStart = "$PTNL";
-String echoToggleStr = "echo";
-
 String sentence;
-String command;
-byte check;
-boolean done;
+char modeChange = ':';
+boolean sentencePending, sentenceReady;
+char cmdBuf[82];
+char sentenceBuf[82];
+int cmdBufIndex = 0;
+int sentenceBufIndex = 0;
+boolean cmdMode, cmdModeChange, cmdRdy, sentenceRdy, gpsDataEnabled;
+String cmdPrefix = "PTNL";
 void setup() {
   Serial.begin( 115200 );
-  ss.begin(4800);
+  ss.begin( 9600 );
   // clear input buffer
   while ( Serial.available() > 0 ) Serial.read();
   while ( ss.available() > 0 ) ss.read();
-  check = CHK_INIT;
+  
+  cmdMode = false;
+  cmdModeChange =  false;
+  cmdRdy = false;
+  sentencePending = false;
+  sentenceReady = false;
+  sentence = String();
+  gpsDataEnabled = true;
+  Serial.println(freeRam());
 }
 
 void loop() {
-  Serial.flush();
-  while (ss.available()) {
-    char c = ss.read();
-    Serial.write(c); 
+  getCharGPS();
+  getCharTerm();
+  if ( cmdMode ) {
+    if ( cmdRdy ) {
+      sendCmd();
+      if ( cmdBuf[0] != 0 ) {
+        getCmdResponse();
+        Serial.print( "cmd:" );
+      }
+      cmdRdy = false;
+      for ( int i = 0 ; i < cmdBufIndex ; i++ ) cmdBuf[i] = '\0';
+      cmdBufIndex = 0;
+    }
+  } else {
+    if (sentenceRdy) {
+      Serial.print( sentence );//Serial.print(freeRam());
+      sentenceRdy = false;
+      sentence = String();
+    }
+  }  
+}
+
+void getCmdResponse() {
+  sentenceRdy = false;
+  sentencePending = false;
+  long timer = millis() + 2000;
+  sentence = String();
+  while ( !sentenceRdy && millis() < timer ) {
+    getCharGPS();
   }
-  while ( Serial.available() > 0 ) {
-    char s = (char) Serial.read();
-    if (s == '\r' ) { // if done with entry
-      while( Serial.available() > 0 ) {
-        Serial.read();
+  if ( sentenceRdy ) {
+    if ( sentence.charAt(5) == 'R' ) {
+      if ( sentence.charAt(9) == 'V' ) {
+        Serial.print( "err:" );
+      } else {
+        Serial.print( " ok:" );
       }
-      if (echoOn) {
-        Serial.write('\r');Serial.write('\n');
-      }
-      done = true;
+      Serial.println( sentence);
     } else {
-      command += s;
-      if (echoOn) Serial.print(s);
-      check ^= (byte)s;
-      
+      Serial.println( "err:No Reply" );
+      Serial.println( "" );
+    }
+    sentenceRdy = false; 
+    sentence = String();
+  }
+}
+
+void sendCmd() {
+  int i = 0;
+  
+  // Strip CR + LF
+  while ( cmdBuf[i] |= 0 ) {
+    if ( cmdBuf[i] == 13 ) cmdBuf[i] = 0;
+    if ( cmdBuf[i] == 10 ) cmdBuf[i] = 0;
+    i++;
+  }
+  
+  // Check for null command when switch into cmd mode.
+  String tmpStr = cmdPrefix + (String)cmdBuf;
+  tmpStr.toUpperCase();
+  if ( cmdBuf[0] != 0 ) {
+    Serial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) );
+    ss.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n");  
+  }
+  Serial.println( "" );
+}
+
+String checkStr( String str ) {
+  char buf[80]; // Max length of NMEA excl. '$',CR,LF = 79, + null
+  str.toCharArray(buf, 80);
+  byte check = 0x00;
+  for ( int i = 0 ; i < str.length() ; i++ ) {
+    check ^= (byte)buf[i];
+  }
+  String chkStr = String( check, HEX );
+  if ( check < 0x10 ) {
+    chkStr = '0' + chkStr;
+  }
+  chkStr.toUpperCase();
+  return chkStr;
+}
+
+void getCharTerm() {
+  char c;
+  if (Serial.available() ) {
+    c = Serial.read();
+    if ( c == ':' ) {
+      cmdMode = !cmdMode;     
+      while ( Serial.read() >= 0 );
+      while ( ss.read() >= 0 );
+      sentenceRdy = false;
+      sentencePending = false;
+      sentence = String();
+      if ( !cmdMode ) {
+        Serial.println("\n");
+      } else {
+        Serial.print( "\ncmd:" );
+      }
+    } else if ( cmdMode && !cmdRdy) {
+      if ( c == 8 ) { // Backspace
+        cmdBuf[cmdBufIndex] = 0;
+        if ( cmdBufIndex != 0 ) cmdBufIndex -=  1;
+      } else {
+        if ( c == 10 ) {
+          cmdRdy = true;
+        }
+        cmdBuf[cmdBufIndex] = c;
+        cmdBufIndex +=1;
+      }
     }
   }
-  if ( done ) {
-    if ( command == echoToggleStr ) {
-      echoOn = !echoOn;
-    } else {
-      String chkStr = String( check, HEX );
-      if ( check < 0x10 ) {
-        chkStr = '0' + chkStr;
+}
+void getCharGPS() {
+  char c;
+  if ( ss.available() ) {
+    c = ss.read();
+    if ( !sentenceRdy ) {
+      if ( c == 36 ) {
+        sentence = String();
+        sentencePending = true;
       }
-      chkStr.toUpperCase();
-      sentence = "$PTNL" + command + '*' + chkStr + '\r' + '\n';
-      Serial.print("Sending: ");Serial.print( sentence );
-      ss.print( sentence );
+      if ( sentencePending && c == 10 ) {
+        sentenceRdy = true;
+        sentencePending = false;
+      }
+      sentence += c;
     }
-    done = false;
-    sentence = "$PTNL";
-    check = CHK_INIT;
-    command = String();
   }
-  delay(100);
+}
+
+int freeRam() 
+{
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
+
+void printCmdBuf() {
+  Serial.print( "buffer:" );
+  for ( int i = 0 ; cmdBuf[i] != 0 ; i++ ) {
+    Serial.print( (int)cmdBuf[i] );Serial.print( " " );
+  }
+  Serial.println( " " );
 }

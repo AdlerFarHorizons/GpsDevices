@@ -7,24 +7,46 @@ Reference:
 
 "Copernicus II(R) GPS Receiver Reference Manual", Appendix C
 
-Uses CopernicusII port B and assumes it is programmed for the
-default 4800 baud rate.
+**INTRODUCTION**
 
-Terminal will display automatically sent NMEA sentences from 
-the unit per the current configuration. The default factory 
-setting is to send a GGA and VTG sentence every second regardless
-of the unit getting an actual fix.
+The program uses CopernicusII port B and assumes it is programmed
+for the default 4800 baud rate.
 
-Enter a Trimble proprietary command sentence exclusive of '$PTNL'
-at the beginning and '\*cs' ('\*' + checksum characters) at the
-end. The terminal will immediately display the entire sentence
-as sent ('Sending: <full sentence>') amid the incoming NMEA
-sentences. If the unit sends a response, it will appear shortly
-after.
+The program has separate modes for sending commands and receiving
+and displaying sentences to/from the device. Terminals don't 
+necessarily have a command line buffer like the Arduino IDE. This 
+feature allows the use of any terminal program and avoids having 
+to compose a command while sentences are constantly being inserted 
+between your keyboard strokes when there is no buffer.
 
-NOTE: Since sending is asynchronous, the display sometimes gets
-garbled temporarily and the message probably got through ok.
-Re-send the message if you're not sure it was received properly.
+**PROGRAM OPERATION**
+
+The program starts in receive mode and will display automatically-
+generated NMEA sentences from the unit per the current configuration,
+if any. The default factory setting is to send a GGA and VTG sentence
+every second. If the unit has a backup battery, it will likely not
+send any data if it has no valid fix. The unit is normally configured
+to report the last fix if power has been cycled. 
+
+Typing a colon (:) will toggle between data display and command
+modes.
+
+In command mode, a "cmd:" prompt is presented and your input is
+accepted and sent upon hitting "Enter".
+
+The command format is a Trimble proprietary command sentence 
+*exclusive of* '$PTNL' at the beginning and '\*cs' ('cs'=> checksum 
+characters) at the end. *Upper and lower case are acceptable*
+
+The full command sentence sent is displayed and then on the next line, 
+the response preceeded with either "err:" or " ok:" is displayed. You
+are then prompted for your next command.
+
+To leave command mode, simply type a colon (:) and data display
+from the device will resume from that point. Any data sent by the
+device while in command mode, is lost.
+
+**DEVICE OPERATION NOTES:**
 
 If you're not seeing any output, the unit might have been
 configured for no automatic sentences on power up. A test to 
