@@ -1,3 +1,5 @@
-This should contain a complete but brief description of the project and its purpose.
+<h2>Work with and evaluate various GPS devices and configurations.</h2>
 
-It should also include entries for major version numbers which include the date and highlights of what's changed or improved.
+<h3>Devices covered:</h3>
+
+1. Copernicus II by Trimble.
