@@ -23,9 +23,9 @@
   is 171ms at 4800 baud. 
 */
 
-#include <SoftwareSerial.h>
-SoftwareSerial ss(6,5);
-const long rateLimit = 19200; //Set for Arduino UNO SoftwareSerial limitations.
+#include <AltSoftSerial.h>
+AltSoftSerial altSerial;
+const long rateLimit = 38400; //Set for Arduino UNO AltSoftSerial limitations.
 
 char modeChange = ':';
 boolean sentencePending, sentenceRdy;
@@ -42,12 +42,12 @@ int baudRatesLen = 6;
 void setup() {
   
   Serial.begin( 115200 );
-  delay(1000);
+  while( !Serial );
   findBaudRate();
   
   // clear input buffer
   while ( Serial.available() > 0 ) Serial.read();
-  while ( ss.available() > 0 ) ss.read();
+  while ( altSerial.available() > 0 ) altSerial.read();
 
   cmdMode = false;
   cmdRdy = false;
@@ -111,7 +111,7 @@ int getCmdResponse() {
         // Check for baud rate change
         if ( rateChangePending && sentenceBuf[6] == 'P' && sentenceBuf[7] == 'T' ) {
           rateChangeFlag = true;
-          ss.begin( rate );
+          altSerial.begin( rate );
           Serial.print("rate changed:");Serial.println( rate );
         }
         result = 0;
@@ -158,7 +158,7 @@ void sendCmd() {
       Serial.print( "Command not sent: SoftwareSerial rate limit <= " );Serial.println( rateLimit );
     } else {
       Serial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) );
-      ss.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n");
+      altSerial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n");
     }
     Serial.println( "" );
   }
@@ -181,7 +181,7 @@ String checkStr( String str ) {
 }
 
 void findBaudRate() {
-  
+  cmdMode = true;
   Serial.println( "Finding baud rate..." );
   boolean baudFound = false;
   int baudIndex = 0;
@@ -190,9 +190,12 @@ void findBaudRate() {
   while ( !baudFound && rate < rateLimit ) {
     rate = atol( baudRates[baudIndex] );
     Serial.print( "Trying " );Serial.print( rate );Serial.println( "..." );
-    ss.begin( rate );
+    altSerial.begin( rate );
+    delay(2000);
+    while ( altSerial.available() > 0 ) altSerial.read();
     String tmpStr = "PTNLQPT";
-    ss.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n" );
+    altSerial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n" );
+    delay(1000);
     if ( getCmdResponse() == 0 ) {
       baudFound = true;
     } else {
@@ -212,7 +215,7 @@ void getCharTerm() {
     if ( c == ':' ) {
       cmdMode = !cmdMode;     
       while ( Serial.read() >= 0 );
-      while ( ss.read() >= 0 );
+      while ( altSerial.read() >= 0 );
       sentenceRdy = false;
       sentencePending = false;
       sentenceBuf[0] = 0;
@@ -240,8 +243,8 @@ void getCharTerm() {
 void getCharGPS() {
   
   char c;
-  if ( ss.available() ) {
-    c = ss.read();
+  if ( altSerial.available() ) {
+    c = altSerial.read();
     if ( !sentenceRdy ) {
       if ( c == 36 ) {
 //        sentence = String();

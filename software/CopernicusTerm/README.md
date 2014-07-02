@@ -21,9 +21,10 @@ between your keyboard strokes when there is no buffer.
 
 **PROGRAM OPERATION**
 
-The program starts by finding the baud rate setting within the range
-of the SoftwareSerial limitations on an Arduino UNO. This limit is
-a constant called "rateLimit" so it can be easily changed for porting
+The hardware terminal baud rate is set to 115000 baud, and the program 
+starts by finding the Copernicus baud rate setting within the range 
+of the AltSoftSerial limitations on an Arduino UNO. This limit is a 
+constant called "rateLimit" so it can be easily changed for porting
 to a platform with different serial performance limits.
 
 It may not find the baud rate (this is a bug). If not, perform an 
@@ -37,12 +38,12 @@ every second. If the unit has a backup battery, it will likely not
 send any data if it has no valid fix. The unit is normally configured
 to report the last fix if power has been cycled.
 
-**NOTE:** Because of SoftwareSerial limitations, the output may not
+**NOTE:** Because of AltSoftSerial limitations, the output may not
 keep up with the data stream from the Copernicus. The baud rate limit
-is set based on writing commands successfully to configure the device,
+is set for writing commands successfully to configure the device,
 not to display data correctly. That's the job of the platform where the
 device is going to be installed. If you want to check the acquisition
-and performance, configure it for less output data.
+and general performance, configure it for less output data.
 
 Typing a colon (:) will toggle between data display and command
 modes.

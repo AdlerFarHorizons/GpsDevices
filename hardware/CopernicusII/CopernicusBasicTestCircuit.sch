@@ -3817,7 +3817,7 @@ type 0309, grid 2.5 mm</description>
 <sheet>
 <plain>
 <text x="38.1" y="127" size="3.81" layer="91">Trimble Copernicus II Sparkfun Module Basic Test Circuit</text>
-<text x="144.78" y="7.62" size="1.9304" layer="91">Software Serial
+<text x="144.78" y="7.62" size="1.9304" layer="91">Alt Software Serial
 Assigned Pins</text>
 <text x="43.18" y="-12.7" size="1.778" layer="91">Rev 2.0.0
 Far Horizons Lab
@@ -3876,9 +3876,9 @@ Level Shifter</text>
 <segment>
 <pinref part="R1" gate="G$1" pin="2"/>
 <wire x1="165.1" y1="71.12" x2="152.4" y2="71.12" width="0.1524" layer="91"/>
-<wire x1="165.1" y1="71.12" x2="165.1" y2="2.54" width="0.1524" layer="91"/>
-<pinref part="U$1" gate="G$1" pin="D5"/>
-<wire x1="139.7" y1="2.54" x2="165.1" y2="2.54" width="0.1524" layer="91"/>
+<pinref part="U$1" gate="G$1" pin="D9"/>
+<wire x1="139.7" y1="15.24" x2="165.1" y2="15.24" width="0.1524" layer="91"/>
+<wire x1="165.1" y1="15.24" x2="165.1" y2="71.12" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$6" class="0">
@@ -3894,15 +3894,15 @@ Level Shifter</text>
 </net>
 <net name="N$2" class="0">
 <segment>
-<wire x1="170.18" y1="106.68" x2="170.18" y2="5.08" width="0.1524" layer="91"/>
 <pinref part="R4" gate="G$1" pin="1"/>
 <pinref part="R3" gate="G$1" pin="2"/>
 <wire x1="139.7" y1="109.22" x2="139.7" y2="106.68" width="0.1524" layer="91"/>
 <wire x1="139.7" y1="106.68" x2="139.7" y2="104.14" width="0.1524" layer="91"/>
 <wire x1="170.18" y1="106.68" x2="139.7" y2="106.68" width="0.1524" layer="91"/>
 <junction x="139.7" y="106.68"/>
-<pinref part="U$1" gate="G$1" pin="D6"/>
-<wire x1="139.7" y1="5.08" x2="170.18" y2="5.08" width="0.1524" layer="91"/>
+<pinref part="U$1" gate="G$1" pin="D8"/>
+<wire x1="139.7" y1="12.7" x2="170.18" y2="12.7" width="0.1524" layer="91"/>
+<wire x1="170.18" y1="12.7" x2="170.18" y2="106.68" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$1" class="0">
