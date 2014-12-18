@@ -1,5 +1,5 @@
 /*
-	TTY NMEA I/O for Trimble's Copernicus II GPS module.
+	TTY TAIP I/O for Trimble's Copernicus II GPS module.
 
 	Connected to Arduino per the schematic 
 	"CopernicusBasicTestCircuit".
@@ -12,7 +12,7 @@
 /*
   NOTES:
   
-  Serial baud rate change is limited to 38400 for sake of AltSoftwareSerial on Arduino UNO.
+  Serial baud rate change is limited to 19200 for sake of SoftwareSerial on Arduino UNO.
   It can't handle anything faster. Not tested on 8MHz 3V Arduino Mini, may be worse. 
   
   GGA is 78 chars, GSV is 52. Serial B delivers this in (130*10 bits)/baudRate sec, or
@@ -23,9 +23,9 @@
   is 171ms at 4800 baud. 
 */
 
-#include <AltSoftSerial.h>
-AltSoftSerial altSerial; // TX Pin 9, RX Pin 8
-const long rateLimit = 38400; //Set for Arduino UNO AltSoftSerial limitations.
+#include <SoftwareSerial.h>
+SoftwareSerial ss(6,5);
+const long rateLimit = 19200; //Set for Arduino UNO SoftwareSerial limitations.
 
 char modeChange = ':';
 boolean sentencePending, sentenceRdy;
@@ -35,19 +35,19 @@ int sentenceBufIndex = 0;
 int cmdBufIndex = 0;
 boolean cmdMode, cmdRdy, rateChangeFlag, rateChangePending;
 long rate;
-String cmdPrefix = "PTNL";
+String cmdPrefix = ">";
 char* baudRates[] = { "004800", "009600", "019200", "038400", "057600", "115200" };
 int baudRatesLen = 6;
 
 void setup() {
-  
-  Serial.begin( 115200 );
-  while( !Serial );
-  findBaudRate();
-  
+
+  Serial.begin( 9600 );
+  delay(2000);
+  //findBaudRate();
+  ss.begin( 4800 );
   // clear input buffer
   while ( Serial.available() > 0 ) Serial.read();
-  while ( altSerial.available() > 0 ) altSerial.read();
+  while ( ss.available() > 0 ) ss.read();
 
   cmdMode = false;
   cmdRdy = false;
@@ -101,17 +101,20 @@ int getCmdResponse() {
     getCharGPS();
   }
   if ( sentenceRdy ) {
-    if ( sentenceBuf[5] == 'R' ) {
-      if ( sentenceBuf[9] == 'V' ) {
+    boolean taipMode = sentenceBuf[0] == '>';
+    int qualPos = ( taipMode ) ? 0 : 5;
+    if ( sentenceBuf[qualPos] == 'R' ) {
+      if ( !taipMode && sentenceBuf[9] == 'V' ) {
         result = 1;
         Serial.print( "err:" );
       } else {
         Serial.print( " ok:" );
         
         // Check for baud rate change
-        if ( rateChangePending && sentenceBuf[6] == 'P' && sentenceBuf[7] == 'T' ) {
+        if ( rateChangePending && !taipMode && 
+              sentenceBuf[6] == 'P' && sentenceBuf[7] == 'T' ) {
           rateChangeFlag = true;
-          altSerial.begin( rate );
+          ss.begin( rate );
           Serial.print("rate changed:");Serial.println( rate );
         }
         result = 0;
@@ -158,7 +161,7 @@ void sendCmd() {
       Serial.print( "Command not sent: SoftwareSerial rate limit <= " );Serial.println( rateLimit );
     } else {
       Serial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) );
-      altSerial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n");
+      ss.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n");
     }
     Serial.println( "" );
   }
@@ -181,7 +184,7 @@ String checkStr( String str ) {
 }
 
 void findBaudRate() {
-  cmdMode = true;
+  
   Serial.println( "Finding baud rate..." );
   boolean baudFound = false;
   int baudIndex = 0;
@@ -190,12 +193,9 @@ void findBaudRate() {
   while ( !baudFound && rate < rateLimit ) {
     rate = atol( baudRates[baudIndex] );
     Serial.print( "Trying " );Serial.print( rate );Serial.println( "..." );
-    altSerial.begin( rate );
-    delay(2000);
-    while ( altSerial.available() > 0 ) altSerial.read();
+    ss.begin( rate );
     String tmpStr = "PTNLQPT";
-    altSerial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n" );
-    delay(1000);
+    ss.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n" );
     if ( getCmdResponse() == 0 ) {
       baudFound = true;
     } else {
@@ -215,7 +215,7 @@ void getCharTerm() {
     if ( c == ':' ) {
       cmdMode = !cmdMode;     
       while ( Serial.read() >= 0 );
-      while ( altSerial.read() >= 0 );
+      while ( ss.read() >= 0 );
       sentenceRdy = false;
       sentencePending = false;
       sentenceBuf[0] = 0;
@@ -243,8 +243,8 @@ void getCharTerm() {
 void getCharGPS() {
   
   char c;
-  if ( altSerial.available() ) {
-    c = altSerial.read();
+  if ( ss.available() ) {
+    c = ss.read();
     if ( !sentenceRdy ) {
       if ( c == 36 ) {
 //        sentence = String();

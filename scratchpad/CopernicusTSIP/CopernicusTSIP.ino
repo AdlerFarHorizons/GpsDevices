@@ -1,48 +1,70 @@
 /*
- 
+	TTY TSIP I/O for Trimble's Copernicus II GPS module.
+
+	Connected to Arduino per the schematic 
+	"CopernicusBasicTestCircuit".
+
+	Far Horizons Lab
+	June 2014
 */
 
-#include <SoftwareSerial.h>
-SoftwareSerial ss(6,5);
-byte nDLE;
-String sentence;
+
+/*
+  NOTES:
+  
+  Serial baud rate change is limited to 38400 for sake of AltSoftwareSerial on Arduino UNO.
+  It can't handle anything faster. Not tested on 8MHz 3V Arduino Mini, may be worse. 
+  
+  GGA is 78 chars, GSV is 52. Serial B delivers this in (130*10 bits)/baudRate sec, or
+  271ms at 4800 baud with default configuration. This would be the minimum latency for
+  the fix.
+  
+  NMEA sentences are 82 chars maximum including CR and LF, so maximum time per sentence
+  is 171ms at 4800 baud. 
+*/
+
+
+#include <AltSoftSerial.h>
+AltSoftSerial altSerial; // TX Pin 9, RX Pin 8
+const long rateLimit = 38400; //Set for Arduino UNO AltSoftSerial limitations.
+
 char modeChange = ':';
-boolean sentencePending, sentenceReady;
-char cmdBuf[82];
-char sentenceBuf[82];
-int cmdBufIndex = 0;
+boolean sentencePending, sentenceRdy;
+byte cmdBuf[82];
+byte sentenceBuf[100];
 int sentenceBufIndex = 0;
-boolean cmdMode, cmdModeChange, cmdRdy, sentenceRdy, gpsDataEnabled;
-String cmdPrefix = "PTNL";
+int cmdBufIndex = 0;
+boolean cmdMode, cmdRdy, rateChangeFlag, rateChangePending;
+long rate;
+byte dle = 0x10;
+byte etx = 0x03;
+char* baudRates[] = { "004800", "009600", "019200", "038400", "057600", "115200" };
+int baudRatesLen = 6;
 
 void setup() {
-  Serial.begin( 115200 );
-  ss.begin( 38400 );
-  while ( Serial.available() > 0 ) Serial.read();
-  while ( ss.available() > 0 ) ss.read();
-  nDLE = 0;
   
+  Serial.begin( 115200 );
+  while( !Serial );
+  findBaudRate();
+  
+  // clear input buffer
+  while ( Serial.available() > 0 ) Serial.read();
+  while ( altSerial.available() > 0 ) altSerial.read();
+
   cmdMode = false;
-  cmdModeChange =  false;
   cmdRdy = false;
   sentencePending = false;
-  sentenceReady = false;
-  sentence = String();
-  gpsDataEnabled = true;
-  Serial.println(freeRam());
+  sentenceRdy = false;
+  rateChangeFlag = false;
+  rateChangePending = false;
+  sentenceBuf[0] = 0;
+  sentenceBufIndex = 0;
+  cmdBuf[0] = 0;
+  cmdBufIndex = 0;
 }
 
 void loop() {
-//  ss.flush();
-//  while (Serial.available()) {
-//    byte c = Serial.read();
-//    if ( c == 0x10 ) nDLE++;
-//    Serial.print( c, HEX );
-//    if ( c == 0x03 && nDLE % 2 == 1 ) {
-//      Serial.println("");
-//      nDLE = 0;
-//    }
-//  }
+  
   getCharGPS();
   getCharTerm();
   if ( cmdMode ) {
@@ -50,6 +72,9 @@ void loop() {
       sendCmd();
       if ( cmdBuf[0] != 0 ) {
         getCmdResponse();
+        if ( rateChangeFlag ) {
+          rateChangeFlag = false;
+        }
         Serial.print( "cmd:" );
       }
       cmdRdy = false;
@@ -58,9 +83,13 @@ void loop() {
     }
   } else {
     if (sentenceRdy) {
-      Serial.print( sentence );//Serial.print(freeRam());
+      for ( int i = 0 ; i < sentenceBufIndex ; i++ ) {
+        Serial.print( hexFill( sentenceBuf[sentenceBufIndex] ) );
+      }
+      //Serial.print( sentenceBuf );//Serial.print(freeRam());
       sentenceRdy = false;
-      sentence = String();
+      sentenceBuf[0] = 0;
+      sentenceBufIndex = 0;
     }
   }  
 }
@@ -80,7 +109,7 @@ void getCmdResponse() {
       } else {
         Serial.print( " ok:" );
       }
-      Serial.println( sentence);
+     Serial.println( sentence);
     } else {
       Serial.println( "err:No Reply" );
       Serial.println( "" );
@@ -125,6 +154,39 @@ String checkStr( String str ) {
   return chkStr;
 }
 
+void findBaudRate() {
+  cmdMode = true;
+  Serial.println( "Finding baud rate..." );
+  boolean baudFound = false;
+  int baudIndex = 0;
+  char temp[7];
+  rate = 0;
+  while ( !baudFound && rate < rateLimit ) {
+    rate = atol( baudRates[baudIndex] );
+    Serial.print( "Trying " );Serial.print( rate );Serial.println( "..." );
+    altSerial.begin( rate );
+    delay(2000);
+    while ( altSerial.available() > 0 ) altSerial.read();
+    //String tmpStr = "PTNLQPT";
+    cmdBuf[0] = dle;
+    cmdBuf[1] = 0xFF;
+    cmdBuf[2] = dle;
+    cmdBuf[3] = dle;
+    cmdBuf[4] = etx;
+    //altSerial.print( "$" + tmpStr + "*" + checkStr( tmpStr ) +"\r\n" );
+    altSerial.write( cmdBuf, 5 );
+    delay(1000);
+    if ( getCmdResponse() == 0 ) {
+      baudFound = true;
+    } else {
+      Serial.println( " no joy." );
+    }
+    baudIndex++;
+  }
+  if ( !baudFound ) Serial.println( "couldn't find baud rate" );
+  cmdMode = false; 
+}
+
 void getCharTerm() {
   char c;
   if (Serial.available() ) {
@@ -156,19 +218,34 @@ void getCharTerm() {
   }
 }
 void getCharGPS() {
-  char c;
+  byte c;
   if ( ss.available() ) {
+    
     c = ss.read();
+    
     if ( !sentenceRdy ) {
-      if ( c == 36 ) {
-        sentence = String();
+      
+      if ( c == dle ) {
+        if ( dleLast ) {
+          dleOdd = !dleOdd;
+        else {
+          dleOdd = true;
+        }
         sentencePending = true;
       }
-      if ( sentencePending && c == 10 ) {
+      
+      if ( c == etx && sentencePending && dleLast && dleOdd ) {
         sentenceRdy = true;
         sentencePending = false;
+        dleOdd = false;
       }
-      sentence += c;
+      
+      // Write only if it's not the second of a pair of dle's
+      if ( !( c == dle && !dleOdd ) ) {
+        sentenceBufIndex++;
+        sentenceBuf[sentencBufIndex] = c;
+      }
+      dleLast = ( c == dle );
     }
   }
 }
@@ -188,4 +265,3 @@ String hexFill( byte inbyte ) {
     chkStr.toUpperCase();
     return chkStr;
 }
-
