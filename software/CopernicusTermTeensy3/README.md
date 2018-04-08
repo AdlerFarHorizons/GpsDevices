@@ -1,7 +1,8 @@
 TTY NMEA I/O for Trimble's Copernicus II GPS module.
 
-Connected to Arduino per the schematic 
-"CopernicusBasicTestCircuit".
+Copernicus Serial Port B connected to Teensy3+ Serial1 port,
+or other port if "Serial1" is replaced with the appropriate
+port throughout the code.
 
 Reference: 
 
@@ -27,13 +28,13 @@ changes as describe in **DEVICE OPERATION NOTES** below
 
 The hardware terminal baud rate is set to 115000 baud, and the program 
 starts by finding the Copernicus baud rate setting within the range 
-of the AltSoftSerial limitations on an Arduino UNO. This limit is a 
+of the standard rates fo the Copernicus II. This limit is a 
 constant called "rateLimit".
 
 It may not find the baud rate on the first try (this is a bug), but
 will keep cycling through baud rate tests until it does, usually on
 the second try. If it continues to fail, power cycle the
-Arduino+Copernicus system and try again.
+Teensy+Copernicus system and try again.
 
 The program then goes to receive mode and will display automatically-
 generated NMEA sentences from the unit per the current configuration,
@@ -41,13 +42,6 @@ if any. The default factory setting is to send a GGA and VTG sentence
 every second. If the unit has a backup battery, it will likely not
 send any data if it has no valid fix. The unit is normally configured
 to report the last fix if power has been cycled.
-
-**NOTE:** Because of AltSoftSerial limitations, the output may not
-keep up with the data stream from the Copernicus. The baud rate limit
-is set for writing commands successfully to configure the device,
-not to display data correctly. That's the job of the platform where the
-device is going to be installed. If you want to check the acquisition
-and general performance, configure it for less output data.
 
 Typing a colon (:) will toggle between data display and command
 modes.

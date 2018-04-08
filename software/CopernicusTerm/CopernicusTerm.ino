@@ -1,11 +1,11 @@
 /*
-	TTY NMEA I/O for Trimble's Copernicus II GPS module.
+  TTY NMEA I/O for Trimble's Copernicus II GPS module.
 
-	Connected to Arduino per the schematic 
-	"CopernicusBasicTestCircuit".
+  Connected to Arduino per the schematic 
+  "CopernicusBasicTestCircuit".
 
-	Far Horizons Lab
-	June 2014
+  Far Horizons Lab
+  June 2014
 */
 
 
@@ -44,7 +44,10 @@ void setup() {
   Serial.begin( 115200 );
   while( !Serial );
   delay( 1000 );
-  findBaudRate();
+  boolean tmp = false;
+  while ( !tmp ) {
+    tmp = findBaudRate();
+  }
   
   // clear input buffer
   while ( Serial.available() > 0 ) Serial.read();
@@ -181,7 +184,7 @@ String checkStr( String str ) {
   return chkStr;
 }
 
-void findBaudRate() {
+boolean findBaudRate() {
   cmdMode = true;
   Serial.println( "Finding baud rate..." );
   boolean baudFound = false;
@@ -205,7 +208,8 @@ void findBaudRate() {
     baudIndex++;
   }
   if ( !baudFound ) Serial.println( "couldn't find baud rate" );
-  cmdMode = false; 
+  cmdMode = false;
+  return baudFound;
 }
 
 void getCharTerm() {

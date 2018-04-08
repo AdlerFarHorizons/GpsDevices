@@ -12,7 +12,7 @@
 
 
 /*
-  NOTE
+  NOTES:
   
   Serial baud rate change is limited to 115000 due to hardware serial port used on Teensy.
   
@@ -24,8 +24,6 @@
   is 171ms at 4800 baud. 
 */
 
-//#include <AltSoftSerial.h>
-//AltSoftSerial altSerial; // TX Pin 9, RX Pin 8
 const long rateLimit = 115200;
 
 char modeChange = ':';
@@ -37,14 +35,18 @@ int cmdBufIndex = 0;
 boolean cmdMode, cmdRdy, rateChangeFlag, rateChangePending;
 long rate;
 String cmdPrefix = "PTNL";
-char* baudRates[] = { "004800", "009600", "019200", "038400", "057600", "115200" };
+const char* baudRates[] = { "004800", "009600", "019200", "038400", "057600", "115200" };
 int baudRatesLen = 6;
 
 void setup() {
   
   Serial.begin( 115200 );
   while( !Serial );
-  findBaudRate();
+  delay( 1000 );
+  boolean tmp = false;
+  while ( !tmp ) {
+    tmp = findBaudRate();
+  }
   
   // clear input buffer
   while ( Serial.available() > 0 ) Serial.read();
@@ -95,7 +97,7 @@ int getCmdResponse() {
   int result = 1;
   sentenceRdy = false;
   sentencePending = false;
-  long timer = millis() + 2000;
+  ulong timer = millis() + 2000;
   sentenceBuf[0] = 0;
   sentenceBufIndex = 0;
   while ( !sentenceRdy && millis() < timer ) {
@@ -170,7 +172,7 @@ String checkStr( String str ) {
   char buf[80]; // Max length of NMEA excl. '$',CR,LF = 79, + null
   str.toCharArray(buf, 80);
   byte check = 0x00;
-  for ( int i = 0 ; i < str.length() ; i++ ) {
+  for ( uint i = 0 ; i < str.length() ; i++ ) {
     check ^= (byte)buf[i];
   }
   String chkStr = String( check, HEX );
@@ -181,12 +183,11 @@ String checkStr( String str ) {
   return chkStr;
 }
 
-void findBaudRate() {
+boolean findBaudRate() {
   cmdMode = true;
   Serial.println( "Finding baud rate..." );
   boolean baudFound = false;
   int baudIndex = 0;
-  char temp[7];
   rate = 0;
   while ( !baudFound && rate < rateLimit ) {
     rate = atol( baudRates[baudIndex] );
@@ -205,7 +206,8 @@ void findBaudRate() {
     baudIndex++;
   }
   if ( !baudFound ) Serial.println( "couldn't find baud rate" );
-  cmdMode = false; 
+  cmdMode = false;
+  return baudFound;
 }
 
 void getCharTerm() {
